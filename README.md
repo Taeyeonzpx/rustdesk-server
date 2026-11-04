@@ -10,8 +10,12 @@
 
 原版 workflow 会登录 Docker Hub / GHCR 推镜像、发 GitHub Release、打 deb 包，需要配置 secrets。这里全部删掉，只留编译。
 
-- 只保留编译：Linux 四个架构（amd64 / arm64v8 / armv7 / i386），产物上传为 Artifact
-- 不推任何镜像仓库，不需要配置任何 secrets
+**改了什么**
+
+- 删除 Docker Hub、GHCR 的登录和推镜像任务
+- 删除 GitHub Release 和 deb 打包任务
+- 只保留编译：Linux 四个架构（amd64 / arm64v8 / armv7 / i386），编译结果上传为 Artifact
+- 不需要配置任何 secrets，也不会向任何镜像仓库推送
 - `Cargo.toml` 里给 `openssl` 开了 `vendored`：cross 的 musl 镜像没有系统 openssl，改成随源码静态编译
 
 ### 2. 搬运 [lejianwen/rustdesk-server](https://github.com/lejianwen/rustdesk-server) 的功能：解决「客户端登录 API 账号后连接超时」
