@@ -1,6 +1,39 @@
 # RustDesk Server Program
 
-[![build](https://github.com/rustdesk/rustdesk-server/actions/workflows/build.yaml/badge.svg)](https://github.com/rustdesk/rustdesk-server/actions/workflows/build.yaml)
+[![build](https://github.com/Taeyeonzpx/rustdesk-server/actions/workflows/build.yaml/badge.svg)](https://github.com/Taeyeonzpx/rustdesk-server/actions/workflows/build.yaml)
+
+## 本仓库改动（中文说明）
+
+这是 [rustdesk/rustdesk-server](https://github.com/rustdesk/rustdesk-server) 的个人 fork，改动只有一处：`.github/workflows/build.yaml`。
+
+**改了什么**
+
+- 删除 Docker Hub、GHCR 的登录和推镜像任务
+- 删除 GitHub Release 和 deb 打包任务
+- 只保留编译：Linux 四个架构（amd64 / arm64v8 / armv7 / i386），编译结果上传为 Artifact
+- 不需要配置任何 secrets，也不会向任何镜像仓库推送
+
+**怎么用**
+
+1. 修改代码，提交并 push
+2. 打开 Actions → `build` → Run workflow（或打 tag：`git tag v1.0.0 && git push origin v1.0.0`）
+3. 运行结束后，在页面底部 Artifacts 下载 `binaries-linux-amd64`
+4. 解压后得到 `hbbs`、`hbbr`、`rustdesk-utils` 三个文件
+5. 在 Linux 服务器上打包镜像：
+
+```bash
+unzip binaries-linux-amd64.zip -d docker/rootfs/usr/bin/
+chmod +x docker/rootfs/usr/bin/hbbs docker/rootfs/usr/bin/hbbr docker/rootfs/usr/bin/rustdesk-utils
+
+docker build -f docker/Dockerfile --build-arg S6_ARCH=x86_64 -t rustdesk-server-s6:dev docker/
+docker compose up -d
+```
+
+**说明**
+
+- 镜像只在本地或服务器上构建，不经过 GitHub
+- 编译产物是 musl 静态链接，可以直接放进 busybox / scratch 镜像
+- 服务器内存不够时，可以在别的机器编译后 `docker save` / `docker load` 传输镜像
 
 [**Download**](https://github.com/rustdesk/rustdesk-server/releases)
 
