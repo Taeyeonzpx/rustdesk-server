@@ -4,7 +4,7 @@
 
 ## 本仓库改动（中文说明）
 
-这是 [rustdesk/rustdesk-server](https://github.com/rustdesk/rustdesk-server) 的个人 fork，改动只有两处：`.github/workflows/build.yaml` 和 `Cargo.toml`。
+这是 [rustdesk/rustdesk-server](https://github.com/rustdesk/rustdesk-server) 的个人 fork，改动有三处：`.github/workflows/build.yaml`、`Cargo.toml` 和 `src/rendezvous_server.rs`。
 
 **改了什么**
 
@@ -13,6 +13,7 @@
 - 只保留编译：Linux 四个架构（amd64 / arm64v8 / armv7 / i386），编译结果上传为 Artifact
 - 不需要配置任何 secrets，也不会向任何镜像仓库推送
 - `Cargo.toml` 里给 `openssl` 开了 `vendored`：cross 的 musl 镜像没有系统 openssl，改成随源码静态编译
+- `src/rendezvous_server.rs`：参考 [lejianwen/rustdesk-server](https://github.com/lejianwen/rustdesk-server)，修复「客户端登录 API 账号后连接超时」——TCP/WS 连接也会回应注册请求，ws 连接的 sink 会被保存下来用于 punch hole 转发
 
 **怎么用**
 
