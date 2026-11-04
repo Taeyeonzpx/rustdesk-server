@@ -4,16 +4,28 @@
 
 ## 本仓库改动（中文说明）
 
-这是 [rustdesk/rustdesk-server](https://github.com/rustdesk/rustdesk-server) 的个人 fork，改动有三处：`.github/workflows/build.yaml`、`Cargo.toml` 和 `src/rendezvous_server.rs`。
+这是 [rustdesk/rustdesk-server](https://github.com/rustdesk/rustdesk-server) 的个人 fork，只做了两件事：
 
-**改了什么**
+### 1. 准备工作：改 `build.yaml`
 
-- 删除 Docker Hub、GHCR 的登录和推镜像任务
-- 删除 GitHub Release 和 deb 打包任务
-- 只保留编译：Linux 四个架构（amd64 / arm64v8 / armv7 / i386），编译结果上传为 Artifact
-- 不需要配置任何 secrets，也不会向任何镜像仓库推送
+原版 workflow 会登录 Docker Hub / GHCR 推镜像、发 GitHub Release、打 deb 包，需要配置 secrets。这里全部删掉，只留编译。
+
+- 只保留编译：Linux 四个架构（amd64 / arm64v8 / armv7 / i386），产物上传为 Artifact
+- 不推任何镜像仓库，不需要配置任何 secrets
 - `Cargo.toml` 里给 `openssl` 开了 `vendored`：cross 的 musl 镜像没有系统 openssl，改成随源码静态编译
-- `src/rendezvous_server.rs`：参考 [lejianwen/rustdesk-server](https://github.com/lejianwen/rustdesk-server)，修复「客户端登录 API 账号后连接超时」——TCP/WS 连接也会回应注册请求，ws 连接的 sink 会被保存下来用于 punch hole 转发
+
+### 2. 搬运 [lejianwen/rustdesk-server](https://github.com/lejianwen/rustdesk-server) 的功能：解决「客户端登录 API 账号后连接超时」
+
+**问题原因**：原版 hbbs 只在 UDP 通道处理注册请求。客户端登录 API 账号后会按 API 下发的配置改走 WebSocket（21118），注册包发出去一直等不到响应，于是连接超时。
+
+**改动文件**：`src/rendezvous_server.rs`
+
+- TCP/WS 通道也会回应 `RegisterPeer` 和 `RegisterPk`（原版在 TCP 上直接回 `NOT_SUPPORT`）
+- 新增 `ws_map`：保存 ws 连接的发送端，打洞消息能发回给 ws 客户端
+- `send_to_tcp` / `send_to_tcp_sync` / punch hole 转发先查 `ws_map`；非 ws 连接查不到，走原逻辑
+- 连接断开时清理 `ws_map`
+
+**没有搬的**（与超时无关）：`MUST_LOGIN` 强制登录、`RUSTDESK_API_JWT_KEY` JWT 校验、`KeyExchange` TCP 加密、`OnlineRequest` 在线状态查询。
 
 **怎么用**
 
