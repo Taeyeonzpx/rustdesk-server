@@ -18,18 +18,18 @@
 - 不需要配置任何 secrets，也不会向任何镜像仓库推送
 - `Cargo.toml` 里给 `openssl` 开了 `vendored`：cross 的 musl 镜像没有系统 openssl，改成随源码静态编译
 
-### 2. 搬运 [lejianwen/rustdesk-server](https://github.com/lejianwen/rustdesk-server) 的功能：解决「客户端登录 API 账号后连接超时」
+### 2. 搬运 [lejianwen/rustdesk-server](https://github.com/lejianwen/rustdesk-server) 的 KeyExchange（commit `9bae6605`）：解决「客户端登录 API 账号后连接超时」
 
-**问题原因**：原版 hbbs 只在 UDP 通道处理注册请求。客户端登录 API 账号后会按 API 下发的配置改走 WebSocket（21118），注册包发出去一直等不到响应，于是连接超时。
+**问题原因**：客户端通过 API 登录后会拿到 token，按 RustDesk 客户端逻辑（`rustdesk/src/client.rs`）token 非空就强制要求走 KeyExchange 加密握手。原版 hbbs 的 TCP 通道不支持 KeyExchange，客户端等不到握手响应就超时。
 
 **改动文件**：`src/rendezvous_server.rs`
 
-- TCP/WS 通道也会回应 `RegisterPeer` 和 `RegisterPk`（原版在 TCP 上直接回 `NOT_SUPPORT`）
-- 新增 `ws_map`：保存 ws 连接的发送端，打洞消息能发回给 ws 客户端
-- `send_to_tcp` / `send_to_tcp_sync` / punch hole 转发先查 `ws_map`；非 ws 连接查不到，走原逻辑
-- 连接断开时清理 `ws_map`
+- `Sink` 增加加密发送路径，`Inner` 增加 `secure_tcp_pk_b` / `secure_tcp_sk_b`
+- 新增 `key_exchange_phase1()` 和 `KeyExchange` 消息分支：TCP 连接收到 KeyExchange 时做 X25519 密钥交换
+- 新增 `get_symmetric_key_from_msg()`：从握手消息派生加密通道用的对称密钥
+- 接收循环对加密通道先解密再处理
 
-**没有搬的**（与超时无关）：`MUST_LOGIN` 强制登录、`RUSTDESK_API_JWT_KEY` JWT 校验、`KeyExchange` TCP 加密、`OnlineRequest` 在线状态查询。
+**没有搬的**（与超时无关）：`MUST_LOGIN` 强制登录、`RUSTDESK_API_JWT_KEY` JWT 校验、ws（WebSocket）支持、`OnlineRequest` 在线状态查询。
 
 **怎么用**
 
@@ -37,13 +37,13 @@
 2. 打开 Actions → `build` → Run workflow（或打 tag：`git tag v1.0.0 && git push origin v1.0.0`）
 3. 运行结束后，在页面底部 Artifacts 下载 `binaries-linux-amd64`
 4. 解压后得到 `hbbs`、`hbbr`、`rustdesk-utils` 三个文件
-5. 在 Linux 服务器上打包镜像：
+5. 在 Linux 服务器上打包镜像（classic，`FROM scratch`）：
 
 ```bash
-unzip binaries-linux-amd64.zip -d docker/rootfs/usr/bin/
-chmod +x docker/rootfs/usr/bin/hbbs docker/rootfs/usr/bin/hbbr docker/rootfs/usr/bin/rustdesk-utils
+unzip binaries-linux-amd64.zip -d docker-classic/
+chmod +x docker-classic/hbbs docker-classic/hbbr
 
-docker build -f docker/Dockerfile --build-arg S6_ARCH=x86_64 -t rustdesk-server-s6:dev docker/
+docker build -f docker-classic/Dockerfile -t rustdesk-server:1.1.16.3 docker-classic/
 docker compose up -d
 ```
 
