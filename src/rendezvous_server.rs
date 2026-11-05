@@ -150,8 +150,6 @@ struct Inner {
 #[derive(Clone)]
 pub struct RendezvousServer {
     tcp_punch: Arc<Mutex<HashMap<SocketAddr, Sink>>>,
-    // ws sink, kept after RegisterPk so punch hole messages can be sent back over it
-    ws_map: Arc<Mutex<HashMap<SocketAddr, Sink>>>,
     pm: PeerMap,
     tx: Sender,
     relay_servers: Arc<RelayServers>,
@@ -223,7 +221,6 @@ impl RendezvousServer {
                 secure_tcp_pk_b,
                 secure_tcp_sk_b,
             }),
-            ws_map: Arc::new(Mutex::new(HashMap::new())),
         };
         log::info!("mask: {:?}", rs.inner.mask);
         log::info!("local-ip: {:?}", rs.inner.local_ip);
@@ -519,35 +516,6 @@ impl RendezvousServer {
     ) -> bool {
         if let Ok(msg_in) = RendezvousMessage::parse_from_bytes(bytes) {
             match msg_in.union {
-                Some(rendezvous_message::Union::RegisterPeer(rp)) => {
-                    // registered over tcp/ws: previously only udp was handled, so ws clients never got a response
-                    if !rp.id.is_empty() && rp.id.len() <= MAX_PEER_ID_LEN {
-                        log::trace!("New peer registered: {:?} {:?}", &rp.id, &addr);
-                        let request_pk = self.update_addr(rp.id, addr).await;
-                        let mut msg_out = RendezvousMessage::new();
-                        msg_out.set_register_peer_response(RegisterPeerResponse {
-                            request_pk,
-                            ..Default::default()
-                        });
-                        Self::send_to_sink(sink, msg_out).await;
-                        if self.inner.serial > rp.serial {
-                            let mut msg_out = RendezvousMessage::new();
-                            msg_out.set_configure_update(ConfigUpdate {
-                                serial: self.inner.serial,
-                                rendezvous_servers: (*self.rendezvous_servers).clone(),
-                                ..Default::default()
-                            });
-                            Self::send_to_sink(sink, msg_out).await;
-                        }
-                        if ws && !request_pk {
-                            // pk already known, so no RegisterPk will follow: keep the sink here
-                            if let Some(sink) = sink.take() {
-                                self.ws_map.lock().await.insert(try_into_v4(addr), sink);
-                            }
-                        }
-                    }
-                    return true;
-                }
                 Some(rendezvous_message::Union::PunchHoleRequest(ph)) => {
                     // there maybe several attempt, so sink can be none
                     if let Some(sink) = sink.take() {
@@ -611,29 +579,13 @@ impl RendezvousServer {
                     msg_out.set_test_nat_response(res);
                     Self::send_to_sink(sink, msg_out).await;
                 }
-                Some(rendezvous_message::Union::RegisterPk(rk)) => {
-                    let res = self.handle_register_pk(rk, addr, ws).await;
-                    let ok = res.is_ok();
+                Some(rendezvous_message::Union::RegisterPk(_rk)) => {
                     let mut msg_out = RendezvousMessage::new();
                     msg_out.set_register_pk_response(RegisterPkResponse {
-                        result: match res {
-                            Ok(res) => res,
-                            Err(err) => err,
-                        }
-                        .into(),
+                        result: register_pk_response::Result::NOT_SUPPORT.into(),
                         ..Default::default()
                     });
                     Self::send_to_sink(sink, msg_out).await;
-                    if !ok {
-                        return false;
-                    }
-                    if ws {
-                        // for ws the sink is only available here, keep it for punch hole
-                        if let Some(sink) = sink.take() {
-                            self.ws_map.lock().await.insert(try_into_v4(addr), sink);
-                        }
-                    }
-                    return true;
                 }
                 Some(rendezvous_message::Union::KeyExchange(ex)) => {
                     if ex.keys.len() != 2 {
@@ -982,32 +934,12 @@ impl RendezvousServer {
         Ok(())
     }
 
-    // ws sinks live in ws_map, try it first; returns None when the message was sent
-    async fn try_send_to_ws(
-        &mut self,
-        msg: RendezvousMessage,
-        addr: SocketAddr,
-    ) -> Option<RendezvousMessage> {
-        let key = try_into_v4(addr);
-        let mut sink = self.ws_map.lock().await.remove(&key);
-        if sink.is_none() {
-            return Some(msg);
-        }
-        Self::send_to_sink(&mut sink, msg).await;
-        if let Some(s) = sink {
-            self.ws_map.lock().await.insert(key, s);
-        }
-        None
-    }
-
     #[inline]
     async fn send_to_tcp(&mut self, msg: RendezvousMessage, addr: SocketAddr) {
-        if let Some(msg) = self.try_send_to_ws(msg, addr).await {
-            let mut tcp = self.tcp_punch.lock().await.remove(&try_into_v4(addr));
-            tokio::spawn(async move {
-                Self::send_to_sink(&mut tcp, msg).await;
-            });
-        }
+        let mut tcp = self.tcp_punch.lock().await.remove(&try_into_v4(addr));
+        tokio::spawn(async move {
+            Self::send_to_sink(&mut tcp, msg).await;
+        });
     }
 
     #[inline]
@@ -1023,10 +955,8 @@ impl RendezvousServer {
         msg: RendezvousMessage,
         addr: SocketAddr,
     ) -> ResultType<()> {
-        if let Some(msg) = self.try_send_to_ws(msg, addr).await {
-            let mut sink = self.tcp_punch.lock().await.remove(&try_into_v4(addr));
-            Self::send_to_sink(&mut sink, msg).await;
-        }
+        let mut sink = self.tcp_punch.lock().await.remove(&try_into_v4(addr));
+        Self::send_to_sink(&mut sink, msg).await;
         Ok(())
     }
 
@@ -1040,9 +970,7 @@ impl RendezvousServer {
     ) -> ResultType<()> {
         let (msg, to_addr) = self.handle_punch_hole_request(addr, ph, key, ws).await?;
         if let Some(addr) = to_addr {
-            if let Some(msg) = self.try_send_to_ws(msg, addr).await {
-                self.tx.send(Data::Msg(msg.into(), addr))?;
-            }
+            self.tx.send(Data::Msg(msg.into(), addr))?;
         } else {
             self.send_to_tcp_sync(msg, addr).await?;
         }
@@ -1400,7 +1328,6 @@ impl RendezvousServer {
         if sink.is_none() {
             self.tcp_punch.lock().await.remove(&try_into_v4(addr));
         }
-        self.ws_map.lock().await.remove(&try_into_v4(addr));
         log::debug!("Tcp connection from {:?} closed", addr);
         Ok(())
     }
