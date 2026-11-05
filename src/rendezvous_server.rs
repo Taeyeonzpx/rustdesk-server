@@ -1479,11 +1479,10 @@ impl RendezvousServer {
     async fn key_exchange_phase1(&mut self, addr: SocketAddr, sink: &mut Option<Sink>) {
         if let Some(sk) = &self.inner.sk {
             let our_pk = self.inner.secure_tcp_pk_b.0.to_vec();
-            let pk = sk.public();
-            let signed_pk = sign::sign_detached(&our_pk, sk, &pk);
+            let signed_pk = sign::sign_detached(&our_pk, sk);
             let mut msg_out = RendezvousMessage::new();
             msg_out.set_key_exchange(KeyExchange {
-                keys: vec![Bytes::from(signed_pk.to_vec())],
+                keys: vec![Bytes::from(signed_pk.0.to_vec())],
                 ..Default::default()
             });
             Self::send_to_sink(sink, msg_out).await;
