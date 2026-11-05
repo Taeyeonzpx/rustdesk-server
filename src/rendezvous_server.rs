@@ -1499,19 +1499,17 @@ fn get_symmetric_key_from_msg(
     their_pk: &[u8],
     encrypted_symmetric_key: &[u8],
 ) -> Option<Vec<u8>> {
-    let their_pk_arr: [u8; box_::PUBKEYBYTES] = their_pk.try_into().ok()?;
+    let their_pk_arr: [u8; box_::PUBLICKEYBYTES] = their_pk.try_into().ok()?;
     let their_pk = box_::PublicKey(their_pk_arr);
     let our_sk = box_::SecretKey(*our_sk);
-    let shared = box_::beforenm(&our_sk, &their_pk);
-    let shared_key = secretbox::Key(shared);
-    let mut mac = [0u8; secretbox::MACBYTES];
+    let shared = box_::precompute(&their_pk, &our_sk);
+    let shared_key = secretbox::Key(shared.0);
     match secretbox::open(
-        &mut mac,
         encrypted_symmetric_key,
         &secretbox::Nonce([0u8; 24]),
         &shared_key,
     ) {
-        Ok(plain) => Some(plain.to_vec()),
+        Ok(plain) => Some(plain),
         Err(_) => None,
     }
 }
