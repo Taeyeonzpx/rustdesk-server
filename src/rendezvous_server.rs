@@ -1478,11 +1478,11 @@ impl RendezvousServer {
 
     async fn key_exchange_phase1(&mut self, addr: SocketAddr, sink: &mut Option<Sink>) {
         if let Some(sk) = &self.inner.sk {
-            let our_pk = self.inner.secure_tcp_pk_b.0.to_vec();
-            let signed_pk = sign::sign_detached(&our_pk, sk);
+            let our_pk_b = self.inner.secure_tcp_pk_b.clone();
+            let sm = sign::sign(&our_pk_b.0, sk);
             let mut msg_out = RendezvousMessage::new();
             msg_out.set_key_exchange(KeyExchange {
-                keys: vec![Bytes::copy_from_slice(signed_pk.as_ref())],
+                keys: vec![Bytes::from(sm)],
                 ..Default::default()
             });
             Self::send_to_sink(sink, msg_out).await;
@@ -1501,16 +1501,7 @@ fn get_symmetric_key_from_msg(
     let their_pk_arr: [u8; box_::PUBLICKEYBYTES] = their_pk.try_into().ok()?;
     let their_pk = box_::PublicKey(their_pk_arr);
     let our_sk = box_::SecretKey(*our_sk);
-    let shared = box_::precompute(&their_pk, &our_sk);
-    let shared_key = secretbox::Key(shared.0);
-    match secretbox::open(
-        encrypted_symmetric_key,
-        &secretbox::Nonce([0u8; 24]),
-        &shared_key,
-    ) {
-        Ok(plain) => Some(plain),
-        Err(_) => None,
-    }
+    box_::open(encrypted_symmetric_key, &box_::Nonce([0u8; 24]), &their_pk, &our_sk).ok()
 }
 
 async fn check_relay_servers(rs0: Arc<RelayServers>, tx: Sender) {
