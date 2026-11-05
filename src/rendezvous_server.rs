@@ -1482,7 +1482,7 @@ impl RendezvousServer {
             let signed_pk = sign::sign_detached(&our_pk, sk);
             let mut msg_out = RendezvousMessage::new();
             msg_out.set_key_exchange(KeyExchange {
-                keys: vec![Bytes::from(signed_pk.0.to_vec())],
+                keys: vec![Bytes::copy_from_slice(signed_pk.as_ref())],
                 ..Default::default()
             });
             Self::send_to_sink(sink, msg_out).await;
