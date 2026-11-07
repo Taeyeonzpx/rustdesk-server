@@ -4,7 +4,7 @@
 
 ## 本仓库改动（中文说明）
 
-这是 [rustdesk/rustdesk-server](https://github.com/rustdesk/rustdesk-server) 的个人 fork，只做了两件事：
+这是 [rustdesk/rustdesk-server](https://github.com/rustdesk/rustdesk-server) 的个人 fork，只做了下面几件事：
 
 ### 1. 准备工作：改 `build.yaml`
 
@@ -43,7 +43,7 @@
 unzip binaries-linux-amd64.zip -d docker-classic/
 chmod +x docker-classic/hbbs docker-classic/hbbr
 
-docker build -f docker-classic/Dockerfile -t rustdesk-server:1.1.16.3 docker-classic/
+docker build -f docker-classic/Dockerfile -t rustdesk-server:<版本号> docker-classic/
 docker compose up -d
 ```
 
@@ -52,6 +52,25 @@ docker compose up -d
 - 镜像只在本地或服务器上构建，不经过 GitHub
 - 编译产物是 musl 静态链接，可以直接放进 busybox / scratch 镜像
 - 服务器内存不够时，可以在别的机器编译后 `docker save` / `docker load` 传输镜像
+
+### 3. 放宽中继带宽默认值（10 Gb/s）
+
+**改动文件**：`src/relay_server.rs`、`docs/environment-variables.md`
+
+| 变量 | 上游默认 | 本 fork | 说明 |
+|---|---|---|---|
+| `SINGLE_BANDWIDTH` | 128 Mb/s | **10240 Mb/s** | 单条中继连接上限 |
+| `TOTAL_BANDWIDTH` | 1024 Mb/s | **10240 Mb/s** | 所有中继连接合计上限 |
+| `LIMIT_SPEED` | 32 Mb/s | 不变 | 只作用于黑名单/被降级的连接 |
+
+- 单条连接实际上不再被单独限速，真实速度由 NAS 的上行带宽和 CPU 决定
+- 两个计数器改成 `AtomicU64`：`usize` 在 32 位（i386 / armv7）装不下 10 Gb
+- 降级阈值随 `SINGLE_BANDWIDTH` 一起放大（约 6.7 Gb/s 持续 30 分钟才触发），正常使用不会触发
+- 想改回保守值：给 hbbr 设环境变量 `SINGLE_BANDWIDTH=128`、`TOTAL_BANDWIDTH=1024`，或在 loopback console 里发 `sb 128`、`tb 1024`
+
+### 4. 已同步上游 `upstream/master`
+
+合并了消息大小上限（`MAX_MESSAGE_KB`，默认 64 KB）、WebSocket 握手/console 回复/relay 写超时、relay waiter 过期修复等安全加固。这些改动和 KeyExchange 走的是不同代码路径，互不影响。
 
 [**Download**](https://github.com/rustdesk/rustdesk-server/releases)
 
