@@ -73,7 +73,7 @@ for help).
 
 | Variable | Default | Unit | Description |
 |---|---|---|---|
-| `SINGLE_BANDWIDTH` | `128` | Mb/s | Normal maximum bandwidth for each relay connection. |
+| `SINGLE_BANDWIDTH` | `1024` | Mb/s | Normal maximum bandwidth for each relay connection. |
 | `TOTAL_BANDWIDTH` | `1024` | Mb/s | Aggregate bandwidth cap shared by all relay connections. |
 | `LIMIT_SPEED` | `32` | Mb/s | Per-connection cap applied after a connection is downgraded, and to IPs in `blacklist.txt`. |
 | `DOWNGRADE_THRESHOLD` | `0.66` | ratio (0–1) | Fraction of `SINGLE_BANDWIDTH` that a connection's lifetime-average throughput must exceed to trigger downgrade. |
