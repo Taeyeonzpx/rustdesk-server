@@ -49,6 +49,7 @@ in the inherited process environment.
 | `DB_URL` 🅴 | *(none)* | `./db_v2.sqlite3` | Path/URL of the SQLite database file. See [Database](#database). |
 | `MAX_DATABASE_CONNECTIONS` 🅴 | *(none)* | `1` | Size of the SQLite connection pool. |
 | `MAX_PUNCH_REQUESTS` 🅴 | *(none)* | `100000` | Number of punch-request records kept in memory for the `punch-requests` [console](#runtime-console) command; the oldest is dropped when full. `0` disables recording. |
+| `MAX_MESSAGE_KB` 🅴 | *(none)* | `64` | Largest message, in KiB, that `hbbs` accepts on its TCP and WebSocket listeners; a connection that sends a bigger one is dropped. Capped at `65536`. The default fits an online-status query for about 5000 standard 9–10 digit IDs, fewer with long custom IDs; a client whose query is too big shows no online status. |
 
 🅴 = set through the inherited process environment.
 
@@ -73,8 +74,8 @@ for help).
 
 | Variable | Default | Unit | Description |
 |---|---|---|---|
-| `SINGLE_BANDWIDTH` | `1024` | Mb/s | Normal maximum bandwidth for each relay connection. |
-| `TOTAL_BANDWIDTH` | `1024` | Mb/s | Aggregate bandwidth cap shared by all relay connections. |
+| `SINGLE_BANDWIDTH` | `10240` | Mb/s | Normal maximum bandwidth for each relay connection. |
+| `TOTAL_BANDWIDTH` | `10240` | Mb/s | Aggregate bandwidth cap shared by all relay connections. |
 | `LIMIT_SPEED` | `32` | Mb/s | Per-connection cap applied after a connection is downgraded, and to IPs in `blacklist.txt`. |
 | `DOWNGRADE_THRESHOLD` | `0.66` | ratio (0–1) | Fraction of `SINGLE_BANDWIDTH` that a connection's lifetime-average throughput must exceed to trigger downgrade. |
 | `DOWNGRADE_START_CHECK` | `1800` | seconds | Delay before a connection becomes eligible for the lifetime-average downgrade check. |
