@@ -68,10 +68,6 @@ docker compose up -d
 - 降级阈值随 `SINGLE_BANDWIDTH` 一起放大（约 6.7 Gb/s 持续 30 分钟才触发），正常使用不会触发
 - 想改回保守值：给 hbbr 设环境变量 `SINGLE_BANDWIDTH=128`、`TOTAL_BANDWIDTH=1024`，或在 loopback console 里发 `sb 128`、`tb 1024`
 
-### 4. 已同步上游 `upstream/master`
-
-合并了消息大小上限（`MAX_MESSAGE_KB`，默认 64 KB）、WebSocket 握手/console 回复/relay 写超时、relay waiter 过期修复等安全加固。这些改动和 KeyExchange 走的是不同代码路径，互不影响。
-
 [**Download**](https://github.com/rustdesk/rustdesk-server/releases)
 
 [**Manual**](https://rustdesk.com/docs/en/self-host/)
